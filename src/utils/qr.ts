@@ -57,6 +57,118 @@ export function generateSmsString(config: SmsConfig): string {
   return `tel:${phone}`;
 }
 
+export function parseWifiString(str: string): WifiConfig | null {
+  if (!str || !str.startsWith('WIFI:')) return null;
+  const config: WifiConfig = {
+    ssid: '',
+    password: '',
+    security: 'WPA',
+    hidden: false,
+  };
+  
+  const unescape = (s: string) => s.replace(/\\([\\:;,])/g, '$1');
+  
+  const body = str.slice(5);
+  const parts = body.split(';');
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith('T:')) {
+      config.security = (trimmed.slice(2) || 'WPA') as WifiConfig['security'];
+    } else if (trimmed.startsWith('S:')) {
+      config.ssid = unescape(trimmed.slice(2));
+    } else if (trimmed.startsWith('P:')) {
+      config.password = unescape(trimmed.slice(2));
+    } else if (trimmed.startsWith('H:')) {
+      config.hidden = trimmed.slice(2).toLowerCase() === 'true';
+    }
+  }
+  
+  return config.ssid ? config : null;
+}
+
+export function parseVCardString(str: string): VCardConfig | null {
+  if (!str || !str.includes('BEGIN:VCARD')) return null;
+  const config: VCardConfig = {
+    firstName: '',
+    lastName: '',
+    organization: '',
+    title: '',
+    phone: '',
+    email: '',
+    url: '',
+    address: '',
+  };
+  
+  const lines = str.split(/\r?\n/);
+  for (const line of lines) {
+    if (line.startsWith('N:')) {
+      const parts = line.slice(2).split(';');
+      config.lastName = parts[0] || '';
+      config.firstName = parts[1] || '';
+    } else if (line.startsWith('FN:')) {
+      if (!config.firstName && !config.lastName) {
+        const full = line.slice(3).trim();
+        const parts = full.split(' ');
+        config.firstName = parts.slice(0, -1).join(' ') || '';
+        config.lastName = parts[parts.length - 1] || '';
+      }
+    } else if (line.startsWith('ORG:')) {
+      config.organization = line.slice(4);
+    } else if (line.startsWith('TITLE:')) {
+      config.title = line.slice(6);
+    } else if (line.startsWith('TEL:')) {
+      config.phone = line.slice(4);
+    } else if (line.startsWith('EMAIL:')) {
+      config.email = line.slice(6);
+    } else if (line.startsWith('URL:')) {
+      config.url = line.slice(4);
+    } else if (line.startsWith('ADR:')) {
+      const parts = line.slice(4).split(';');
+      config.address = parts[parts.length - 1] || '';
+    }
+  }
+  
+  return config;
+}
+
+export function parseEmailString(str: string): EmailConfig | null {
+  if (!str || !str.startsWith('mailto:')) return null;
+  const config: EmailConfig = {
+    to: '',
+    subject: '',
+    body: '',
+  };
+  
+  const [toPart, queryPart] = str.slice(7).split('?');
+  config.to = toPart;
+  
+  if (queryPart) {
+    const params = new URLSearchParams(queryPart);
+    config.subject = params.get('subject') || '';
+    config.body = params.get('body') || '';
+  }
+  
+  return config.to ? config : null;
+}
+
+export function parseSmsString(str: string): SmsConfig | null {
+  if (!str) return null;
+  const config: SmsConfig = {
+    phone: '',
+    message: '',
+  };
+  
+  if (str.startsWith('SMSTO:')) {
+    const parts = str.slice(6).split(':');
+    config.phone = parts[0] || '';
+    config.message = parts.slice(1).join(':') || '';
+  } else if (str.startsWith('tel:')) {
+    config.phone = str.slice(4);
+  }
+  
+  return config.phone ? config : null;
+}
+
 export function getQrContent(config: QrConfig): string {
   switch (config.type) {
     case 'url':
