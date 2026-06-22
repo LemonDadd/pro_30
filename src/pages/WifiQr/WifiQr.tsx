@@ -2,13 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { useQrStore } from '@/store/qrStore';
 import QrPreview from '@/components/QrPreview/QrPreview';
 import { Wifi, Download, Eye, EyeOff, Copy, Check } from 'lucide-react';
-import { generateWifiString, generateQrCanvas, downloadQrPng } from '@/utils/qr';
+import { generateQrCanvas, downloadQrPng } from '@/utils/qr';
 import { copyToClipboard } from '@/utils/share';
-import type { WifiConfig as WifiConfigType, QrConfig } from '@/types';
-import { saveHistory } from '@/utils/storage';
+import type { WifiConfig as WifiConfigType } from '@/types';
 
 export default function WifiQr() {
-  const { qrConfig, setQrConfig, setQrType, wifiConfig, setWifiConfig, updateQrContent } = useQrStore();
+  const { 
+    qrConfig, setQrConfig, setQrType, 
+    wifiConfig, setWifiConfig, 
+    currentQrContent,
+    saveWifiToHistory,
+  } = useQrStore();
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,30 +25,13 @@ export default function WifiQr() {
     setWifiConfig({ [key]: value } as Partial<WifiConfigType>);
   };
   
-  const getContent = () => {
-    return generateWifiString(wifiConfig);
-  };
-  
-  const content = getContent();
+  const content = currentQrContent;
   
   const handleDownload = async () => {
     const canvas = document.createElement('canvas');
     await generateQrCanvas(canvas, content, qrConfig);
     downloadQrPng(canvas, `wifi_${wifiConfig.ssid || 'qrcode'}.png`);
-    
-    const fullConfig: QrConfig = {
-      ...qrConfig,
-      type: 'wifi',
-      content,
-      formData: { wifi: { ...wifiConfig } },
-    };
-    
-    saveHistory({
-      type: 'wifi',
-      config: fullConfig,
-      preview: canvas.toDataURL('image/png'),
-      content: `WiFi: ${wifiConfig.ssid}`,
-    });
+    saveWifiToHistory(canvas.toDataURL('image/png'));
   };
   
   const handleCopyPassword = async () => {

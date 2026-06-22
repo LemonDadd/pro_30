@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { QrConfig, BarcodeConfig, WifiConfig, VCardConfig, EmailConfig, SmsConfig, HistoryItem } from '@/types';
 import { generateWifiString, generateVCardString, generateEmailString, generateSmsString } from '@/utils/qr';
 
+export type SaveHistoryType = 'qr' | 'barcode' | 'wifi';
+
 interface QrState {
   qrConfig: QrConfig;
   barcodeConfig: BarcodeConfig;
@@ -10,6 +12,8 @@ interface QrState {
   emailConfig: EmailConfig;
   smsConfig: SmsConfig;
   history: HistoryItem[];
+  currentQrContent: string;
+  fullQrConfig: QrConfig;
   setQrConfig: (config: Partial<QrConfig>) => void;
   setBarcodeConfig: (config: Partial<BarcodeConfig>) => void;
   setWifiConfig: (config: Partial<WifiConfig>) => void;
@@ -22,6 +26,10 @@ interface QrState {
   deleteHistoryItem: (id: string) => void;
   loadFromHistory: (item: HistoryItem) => void;
   updateQrContent: () => void;
+  saveQrToHistory: (preview: string) => HistoryItem | null;
+  saveWifiToHistory: (preview: string) => HistoryItem | null;
+  saveBarcodeToHistory: (preview: string) => HistoryItem | null;
+  getHistoryTypeLabel: (type: SaveHistoryType) => string;
 }
 
 const defaultQrConfig: QrConfig = {
@@ -132,6 +140,48 @@ function buildFormData(type: QrConfig['type'], forms: {
   }
 }
 
+function buildFullConfig(
+  baseConfig: QrConfig,
+  forms: { wifi: WifiConfig; vcard: VCardConfig; email: EmailConfig; sms: SmsConfig }
+): QrConfig {
+  return {
+    ...baseConfig,
+    content: calculateContent(baseConfig, forms),
+    formData: buildFormData(baseConfig.type, forms),
+  };
+}
+
+function writeHistoryLocal(newHistory: HistoryItem[]): void {
+  localStorage.setItem('qr_studio_history', JSON.stringify(newHistory.slice(0, 20)));
+}
+
+function syncDerived(state: Partial<QrState> & Pick<QrState, 'qrConfig' | 'wifiConfig' | 'vcardConfig' | 'emailConfig' | 'smsConfig'>): Partial<QrState> {
+  const forms = {
+    wifi: state.wifiConfig,
+    vcard: state.vcardConfig,
+    email: state.emailConfig,
+    sms: state.smsConfig,
+  };
+  const fullQrConfig = buildFullConfig(state.qrConfig, forms);
+  return {
+    ...state,
+    qrConfig: fullQrConfig,
+    currentQrContent: fullQrConfig.content,
+    fullQrConfig,
+  };
+}
+
+function pushHistory(history: HistoryItem[], item: Omit<HistoryItem, 'id' | 'createdAt'>): HistoryItem[] {
+  const newItem: HistoryItem = {
+    ...item,
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+    createdAt: Date.now(),
+  };
+  const newHistory = [newItem, ...history].slice(0, 20);
+  writeHistoryLocal(newHistory);
+  return newHistory;
+}
+
 export const useQrStore = create<QrState>((set, get) => ({
   qrConfig: defaultQrConfig,
   barcodeConfig: defaultBarcodeConfig,
@@ -140,128 +190,57 @@ export const useQrStore = create<QrState>((set, get) => ({
   emailConfig: defaultEmailConfig,
   smsConfig: defaultSmsConfig,
   history: [],
-  
-  setQrConfig: (config) => set((state) => {
-    const newQrConfig = { ...state.qrConfig, ...config };
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: state.vcardConfig,
-      email: state.emailConfig,
-      sms: state.smsConfig,
-    };
-    newQrConfig.content = calculateContent(newQrConfig, forms);
-    newQrConfig.formData = buildFormData(newQrConfig.type, forms);
-    return { qrConfig: newQrConfig };
+  currentQrContent: calculateContent(defaultQrConfig, {
+    wifi: defaultWifiConfig,
+    vcard: defaultVcardConfig,
+    email: defaultEmailConfig,
+    sms: defaultSmsConfig,
   }),
+  fullQrConfig: buildFullConfig(defaultQrConfig, {
+    wifi: defaultWifiConfig,
+    vcard: defaultVcardConfig,
+    email: defaultEmailConfig,
+    sms: defaultSmsConfig,
+  }),
+  
+  setQrConfig: (config) => set((state) => syncDerived({
+    ...state,
+    qrConfig: { ...state.qrConfig, ...config },
+  })),
   
   setBarcodeConfig: (config) => set((state) => ({
     barcodeConfig: { ...state.barcodeConfig, ...config },
   })),
   
-  setWifiConfig: (config) => set((state) => {
-    const wifiConfig = { ...state.wifiConfig, ...config };
-    const forms = {
-      wifi: wifiConfig,
-      vcard: state.vcardConfig,
-      email: state.emailConfig,
-      sms: state.smsConfig,
-    };
-    const newQrConfig = { ...state.qrConfig };
-    if (newQrConfig.type === 'wifi') {
-      newQrConfig.content = calculateContent(newQrConfig, forms);
-      newQrConfig.formData = buildFormData('wifi', forms);
-    }
-    return { wifiConfig, qrConfig: newQrConfig };
-  }),
+  setWifiConfig: (config) => set((state) => syncDerived({
+    ...state,
+    wifiConfig: { ...state.wifiConfig, ...config },
+  })),
   
-  setVcardConfig: (config) => set((state) => {
-    const vcardConfig = { ...state.vcardConfig, ...config };
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: vcardConfig,
-      email: state.emailConfig,
-      sms: state.smsConfig,
-    };
-    const newQrConfig = { ...state.qrConfig };
-    if (newQrConfig.type === 'vcard') {
-      newQrConfig.content = calculateContent(newQrConfig, forms);
-      newQrConfig.formData = buildFormData('vcard', forms);
-    }
-    return { vcardConfig, qrConfig: newQrConfig };
-  }),
+  setVcardConfig: (config) => set((state) => syncDerived({
+    ...state,
+    vcardConfig: { ...state.vcardConfig, ...config },
+  })),
   
-  setEmailConfig: (config) => set((state) => {
-    const emailConfig = { ...state.emailConfig, ...config };
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: state.vcardConfig,
-      email: emailConfig,
-      sms: state.smsConfig,
-    };
-    const newQrConfig = { ...state.qrConfig };
-    if (newQrConfig.type === 'email') {
-      newQrConfig.content = calculateContent(newQrConfig, forms);
-      newQrConfig.formData = buildFormData('email', forms);
-    }
-    return { emailConfig, qrConfig: newQrConfig };
-  }),
+  setEmailConfig: (config) => set((state) => syncDerived({
+    ...state,
+    emailConfig: { ...state.emailConfig, ...config },
+  })),
   
-  setSmsConfig: (config) => set((state) => {
-    const smsConfig = { ...state.smsConfig, ...config };
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: state.vcardConfig,
-      email: state.emailConfig,
-      sms: smsConfig,
-    };
-    const newQrConfig = { ...state.qrConfig };
-    if (newQrConfig.type === 'sms') {
-      newQrConfig.content = calculateContent(newQrConfig, forms);
-      newQrConfig.formData = buildFormData('sms', forms);
-    }
-    return { smsConfig, qrConfig: newQrConfig };
-  }),
+  setSmsConfig: (config) => set((state) => syncDerived({
+    ...state,
+    smsConfig: { ...state.smsConfig, ...config },
+  })),
   
-  setQrType: (type) => set((state) => {
-    const newQrConfig = { ...state.qrConfig, type };
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: state.vcardConfig,
-      email: state.emailConfig,
-      sms: state.smsConfig,
-    };
-    
-    if (type !== 'url' && type !== 'text' && type !== 'tel') {
-      newQrConfig.content = calculateContent({ ...newQrConfig, type }, forms);
-    }
-    newQrConfig.formData = buildFormData(type, forms);
-    
-    return { qrConfig: newQrConfig };
-  }),
+  setQrType: (type) => set((state) => syncDerived({
+    ...state,
+    qrConfig: { ...state.qrConfig, type, content: (type === 'url' || type === 'text' || type === 'tel') ? state.qrConfig.content : '' },
+  })),
   
-  updateQrContent: () => set((state) => {
-    const forms = {
-      wifi: state.wifiConfig,
-      vcard: state.vcardConfig,
-      email: state.emailConfig,
-      sms: state.smsConfig,
-    };
-    const newQrConfig = { ...state.qrConfig };
-    newQrConfig.content = calculateContent(newQrConfig, forms);
-    newQrConfig.formData = buildFormData(newQrConfig.type, forms);
-    return { qrConfig: newQrConfig };
-  }),
+  updateQrContent: () => set((state) => syncDerived(state)),
   
   addHistory: (item) => {
-    const history = get().history;
-    const newItem: HistoryItem = {
-      ...item,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      createdAt: Date.now(),
-    };
-    
-    const newHistory = [newItem, ...history].slice(0, 20);
-    localStorage.setItem('qr_studio_history', JSON.stringify(newHistory));
+    const newHistory = pushHistory(get().history, item);
     set({ history: newHistory });
   },
   
@@ -272,40 +251,79 @@ export const useQrStore = create<QrState>((set, get) => ({
   
   deleteHistoryItem: (id) => {
     const history = get().history.filter(item => item.id !== id);
-    localStorage.setItem('qr_studio_history', JSON.stringify(history));
+    writeHistoryLocal(history);
     set({ history });
   },
   
   loadFromHistory: (item) => {
-    if (item.type === 'qr') {
+    if (item.type === 'qr' || item.type === 'wifi') {
       const config = item.config as QrConfig;
-      const updates: any = { qrConfig: config };
-      
-      if (config.formData) {
-        if (config.formData.wifi) {
-          updates.wifiConfig = { ...defaultWifiConfig, ...config.formData.wifi };
-        }
-        if (config.formData.vcard) {
-          updates.vcardConfig = { ...defaultVcardConfig, ...config.formData.vcard };
-        }
-        if (config.formData.email) {
-          updates.emailConfig = { ...defaultEmailConfig, ...config.formData.email };
-        }
-        if (config.formData.sms) {
-          updates.smsConfig = { ...defaultSmsConfig, ...config.formData.sms };
-        }
-      }
-      
-      set(updates);
+      const updates: any = {
+        qrConfig: { ...defaultQrConfig, ...config },
+        wifiConfig: config.formData?.wifi ? { ...defaultWifiConfig, ...config.formData.wifi } : defaultWifiConfig,
+        vcardConfig: config.formData?.vcard ? { ...defaultVcardConfig, ...config.formData.vcard } : defaultVcardConfig,
+        emailConfig: config.formData?.email ? { ...defaultEmailConfig, ...config.formData.email } : defaultEmailConfig,
+        smsConfig: config.formData?.sms ? { ...defaultSmsConfig, ...config.formData.sms } : defaultSmsConfig,
+      };
+      set(syncDerived(updates));
     } else if (item.type === 'barcode') {
       set({ barcodeConfig: item.config as BarcodeConfig });
-    } else if (item.type === 'wifi') {
-      const config = item.config as QrConfig;
-      const updates: any = { qrConfig: config };
-      if (config.formData?.wifi) {
-        updates.wifiConfig = { ...defaultWifiConfig, ...config.formData.wifi };
+    }
+  },
+  
+  saveQrToHistory: (preview: string) => {
+    const { fullQrConfig, currentQrContent, history } = get();
+    if (!currentQrContent && !fullQrConfig.formData) return null;
+    const newHistory = pushHistory(history, {
+      type: 'qr',
+      config: fullQrConfig,
+      preview,
+      content: currentQrContent.substring(0, 50),
+    });
+    set({ history: newHistory });
+    return newHistory[0];
+  },
+  
+  saveWifiToHistory: (preview: string) => {
+    const { fullQrConfig, currentQrContent, wifiConfig, history } = get();
+    const full = buildFullConfig(
+      { ...fullQrConfig, type: 'wifi' },
+      {
+        wifi: wifiConfig,
+        vcard: get().vcardConfig,
+        email: get().emailConfig,
+        sms: get().smsConfig,
       }
-      set(updates);
+    );
+    const newHistory = pushHistory(history, {
+      type: 'wifi',
+      config: full,
+      preview,
+      content: `WiFi: ${wifiConfig.ssid}`,
+    });
+    set({ history: newHistory });
+    return newHistory[0];
+  },
+  
+  saveBarcodeToHistory: (preview: string) => {
+    const { barcodeConfig, history } = get();
+    if (!barcodeConfig.content) return null;
+    const newHistory = pushHistory(history, {
+      type: 'barcode',
+      config: barcodeConfig,
+      preview,
+      content: barcodeConfig.content.substring(0, 50),
+    });
+    set({ history: newHistory });
+    return newHistory[0];
+  },
+  
+  getHistoryTypeLabel: (type: SaveHistoryType) => {
+    switch (type) {
+      case 'qr': return '二维码';
+      case 'barcode': return '条码';
+      case 'wifi': return 'WiFi';
+      default: return type;
     }
   },
 }));

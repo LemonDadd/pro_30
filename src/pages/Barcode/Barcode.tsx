@@ -13,7 +13,7 @@ const barcodeFormats: { format: BarcodeFormat; label: string; description: strin
 ];
 
 export default function BarcodePage() {
-  const { barcodeConfig, setBarcodeConfig } = useQrStore();
+  const { barcodeConfig, setBarcodeConfig, saveBarcodeToHistory } = useQrStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -40,6 +40,7 @@ export default function BarcodePage() {
   const handleDownload = () => {
     if (canvasRef.current) {
       downloadBarcodePng(canvasRef.current, `barcode_${Date.now()}.png`);
+      saveBarcodeToHistory(canvasRef.current.toDataURL('image/png'));
     }
   };
   

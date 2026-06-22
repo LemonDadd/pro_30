@@ -3,7 +3,6 @@ import { X, Link, Code, Copy, Check } from 'lucide-react';
 import { useQrStore } from '@/store/qrStore';
 import { encodeShareUrl, generateEmbedCode, copyToClipboard } from '@/utils/share';
 import { generateQrSvg } from '@/utils/qr';
-import type { QrConfig } from '@/types';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -11,7 +10,7 @@ interface ShareModalProps {
 }
 
 export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
-  const { qrConfig, updateQrContent, wifiConfig, vcardConfig, emailConfig, smsConfig } = useQrStore();
+  const { fullQrConfig, currentQrContent, updateQrContent } = useQrStore();
   const [activeTab, setActiveTab] = useState<'link' | 'embed'>('link');
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
@@ -25,28 +24,13 @@ export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
     }
   }, [isOpen, updateQrContent]);
   
-  const getFullConfig = (): QrConfig => {
-    const formData: QrConfig['formData'] = {};
-    if (qrConfig.type === 'wifi') formData.wifi = { ...wifiConfig };
-    if (qrConfig.type === 'vcard') formData.vcard = { ...vcardConfig };
-    if (qrConfig.type === 'email') formData.email = { ...emailConfig };
-    if (qrConfig.type === 'sms') formData.sms = { ...smsConfig };
-    
-    return {
-      ...qrConfig,
-      content: qrConfig.content,
-      formData,
-    };
-  };
-  
   const handleGenerate = async () => {
     updateQrContent();
-    const fullConfig = getFullConfig();
-    const url = encodeShareUrl(fullConfig, 'qr');
+    const url = encodeShareUrl(fullQrConfig, 'qr');
     setShareUrl(url);
     
     try {
-      const svgString = await generateQrSvg(fullConfig.content, fullConfig);
+      const svgString = await generateQrSvg(currentQrContent, fullQrConfig);
       const embed = generateEmbedCode(svgString);
       setEmbedCode(embed);
     } catch (e) {

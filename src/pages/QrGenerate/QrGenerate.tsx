@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQrStore } from '@/store/qrStore';
 import QrPreview, { useQrCanvas } from '@/components/QrPreview/QrPreview';
 import { 
@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { downloadQrPng, downloadQrSvg, generateQrSvg } from '@/utils/qr';
 import type { QrContentType } from '@/types';
-import { saveHistory } from '@/utils/storage';
 
 const contentTypes: { type: QrContentType; label: string; icon: any }[] = [
   { type: 'url', label: 'URL', icon: Link },
@@ -27,16 +26,15 @@ export default function QrGenerate() {
     vcardConfig, setVcardConfig,
     emailConfig, setEmailConfig,
     smsConfig, setSmsConfig,
-    updateQrContent,
+    currentQrContent,
+    saveQrToHistory,
   } = useQrStore();
   const { canvasRef, generate, getDataUrl } = useQrCanvas();
   const [expandedSection, setExpandedSection] = useState<string | null>('style');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const getContent = useCallback((): string => {
-    return qrConfig.content || '';
-  }, [qrConfig.content]);
+  const content = currentQrContent;
   
   const handleTypeChange = (type: QrContentType) => {
     setQrType(type);
@@ -61,54 +59,26 @@ export default function QrGenerate() {
   };
   
   const handleDownloadPng = async () => {
-    const content = getContent();
     if (canvasRef.current) {
       await generate(content, qrConfig);
       downloadQrPng(canvasRef.current, `qrcode_${Date.now()}.png`);
-      saveToHistory();
+      saveQrToHistory(getDataUrl());
     }
   };
   
   const handleDownloadSvg = async () => {
-    const content = getContent();
     try {
       const svgString = await generateQrSvg(content, qrConfig);
       downloadQrSvg(svgString, `qrcode_${Date.now()}.svg`);
-      saveToHistory();
+      saveQrToHistory(getDataUrl());
     } catch (e) {
       console.error('SVG download failed', e);
     }
   };
   
-  const saveToHistory = () => {
-    const content = getContent();
-    const preview = getDataUrl();
-    
-    const formData: typeof qrConfig.formData = {};
-    if (qrConfig.type === 'wifi') formData.wifi = { ...wifiConfig };
-    if (qrConfig.type === 'vcard') formData.vcard = { ...vcardConfig };
-    if (qrConfig.type === 'email') formData.email = { ...emailConfig };
-    if (qrConfig.type === 'sms') formData.sms = { ...smsConfig };
-    
-    const fullConfig = {
-      ...qrConfig,
-      content,
-      formData,
-    };
-    
-    saveHistory({
-      type: 'qr',
-      config: fullConfig,
-      preview,
-      content: content.substring(0, 50),
-    });
-  };
-  
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
-  
-  const content = getContent();
   
   return (
     <div className="animate-fade-in">
