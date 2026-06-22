@@ -12,6 +12,7 @@ export default function QrScan() {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -23,10 +24,7 @@ export default function QrScan() {
     setScanHistory(getScanHistory());
   }, []);
   
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
+  const processImageFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -63,6 +61,31 @@ export default function QrScan() {
     };
     reader.readAsDataURL(file);
   };
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImageFile(file);
+  };
+  
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return;
+    processImageFile(file);
+  }, []);
+  
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+  
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
   
   const scanMultipleQRs = (ctx: CanvasRenderingContext2D, width: number, height: number): string[] => {
     const results: string[] = [];
@@ -246,12 +269,25 @@ export default function QrScan() {
                 
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-dark-border rounded-2xl p-12 text-center cursor-pointer hover:border-neon-cyan/50 transition-colors group"
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all group ${
+                    isDragOver
+                      ? 'border-neon-cyan bg-neon-cyan/10 scale-[1.02]'
+                      : 'border-dark-border hover:border-neon-cyan/50'
+                  }`}
                 >
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-dark-surface flex items-center justify-center group-hover:bg-neon-cyan/10 transition-colors">
-                    <UploadIcon className="w-8 h-8 text-gray-400 group-hover:text-neon-cyan transition-colors" />
+                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center transition-colors ${
+                    isDragOver ? 'bg-neon-cyan/20' : 'bg-dark-surface group-hover:bg-neon-cyan/10'
+                  }`}>
+                    <UploadIcon className={`w-8 h-8 transition-colors ${
+                      isDragOver ? 'text-neon-cyan' : 'text-gray-400 group-hover:text-neon-cyan'
+                    }`} />
                   </div>
-                  <p className="text-white font-medium mb-2">点击或拖拽图片到此处</p>
+                  <p className="text-white font-medium mb-2">
+                    {isDragOver ? '释放以解析二维码' : '点击或拖拽图片到此处'}
+                  </p>
                   <p className="text-sm text-gray-500">支持 PNG, JPG, GIF 等常见图片格式</p>
                 </div>
               </div>

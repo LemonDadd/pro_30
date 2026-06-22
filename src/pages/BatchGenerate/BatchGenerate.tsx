@@ -65,7 +65,7 @@ export default function BatchGenerate() {
     if (!parsedData) return;
     
     setIsGenerating(true);
-    const previewRows = parsedData.rows.slice(0, 6).filter(row => row[selectedColumn]?.trim());
+    const previewRows = parsedData.rows.slice(0, 3).filter(row => row[selectedColumn]?.trim());
     const results: { content: string; dataUrl: string }[] = [];
     
     const canvas = document.createElement('canvas');
@@ -280,10 +280,10 @@ export default function BatchGenerate() {
             </h3>
             
             <p className="text-sm text-gray-400 mb-4">
-              预览前 {previewQRs.length} 个二维码，共 {parsedData?.rowCount} 行有效数据
+              预览前 {previewQRs.length} 行二维码（共 {parsedData?.rowCount} 行有效数据）
             </p>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
               {previewQRs.map((qr, index) => (
                 <div
                   key={index}
