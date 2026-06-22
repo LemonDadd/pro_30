@@ -13,7 +13,7 @@ import type { QrConfig, BarcodeConfig } from "@/types";
 
 function DeepLinkHandler() {
   const navigate = useNavigate();
-  const setQrConfig = useQrStore(s => s.setQrConfig);
+  const loadFromHistory = useQrStore(s => s.loadFromHistory);
   const setBarcodeConfig = useQrStore(s => s.setBarcodeConfig);
   
   useEffect(() => {
@@ -22,14 +22,22 @@ function DeepLinkHandler() {
     const shared = decodeShareUrl();
     if (shared) {
       if (shared.type === 'qr') {
-        setQrConfig(shared.config as Partial<QrConfig>);
+        const config = shared.config as QrConfig;
+        loadFromHistory({
+          id: 'deeplink',
+          type: 'qr',
+          config,
+          preview: '',
+          content: config.content,
+          createdAt: Date.now(),
+        });
         navigate('/');
       } else if (shared.type === 'barcode') {
         setBarcodeConfig(shared.config as Partial<BarcodeConfig>);
         navigate('/barcode');
       }
     }
-  }, [navigate, setQrConfig, setBarcodeConfig]);
+  }, [navigate, loadFromHistory, setBarcodeConfig]);
   
   return null;
 }

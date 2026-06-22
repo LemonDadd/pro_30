@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Link, Code, Copy, Check } from 'lucide-react';
 import { useQrStore } from '@/store/qrStore';
 import { encodeShareUrl, generateEmbedCode, copyToClipboard } from '@/utils/share';
 import { generateQrSvg } from '@/utils/qr';
+import type { QrConfig } from '@/types';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -10,18 +11,42 @@ interface ShareModalProps {
 }
 
 export default function ShareModal({ isOpen, onClose }: ShareModalProps) {
-  const { qrConfig } = useQrStore();
+  const { qrConfig, updateQrContent, wifiConfig, vcardConfig, emailConfig, smsConfig } = useQrStore();
   const [activeTab, setActiveTab] = useState<'link' | 'embed'>('link');
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [embedCode, setEmbedCode] = useState('');
   
+  useEffect(() => {
+    if (isOpen) {
+      updateQrContent();
+      setShareUrl('');
+      setEmbedCode('');
+    }
+  }, [isOpen, updateQrContent]);
+  
+  const getFullConfig = (): QrConfig => {
+    const formData: QrConfig['formData'] = {};
+    if (qrConfig.type === 'wifi') formData.wifi = { ...wifiConfig };
+    if (qrConfig.type === 'vcard') formData.vcard = { ...vcardConfig };
+    if (qrConfig.type === 'email') formData.email = { ...emailConfig };
+    if (qrConfig.type === 'sms') formData.sms = { ...smsConfig };
+    
+    return {
+      ...qrConfig,
+      content: qrConfig.content,
+      formData,
+    };
+  };
+  
   const handleGenerate = async () => {
-    const url = encodeShareUrl(qrConfig, 'qr');
+    updateQrContent();
+    const fullConfig = getFullConfig();
+    const url = encodeShareUrl(fullConfig, 'qr');
     setShareUrl(url);
     
     try {
-      const svgString = await generateQrSvg(qrConfig.content, qrConfig);
+      const svgString = await generateQrSvg(fullConfig.content, fullConfig);
       const embed = generateEmbedCode(svgString);
       setEmbedCode(embed);
     } catch (e) {

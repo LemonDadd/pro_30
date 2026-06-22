@@ -19,6 +19,13 @@ export interface QrLogo {
   size: number;
 }
 
+export interface QrFormData {
+  wifi?: WifiConfig;
+  vcard?: VCardConfig;
+  email?: EmailConfig;
+  sms?: SmsConfig;
+}
+
 export interface QrConfig {
   type: QrContentType;
   content: string;
@@ -30,6 +37,7 @@ export interface QrConfig {
   logo: QrLogo;
   roundedDots: boolean;
   renderMode: RenderMode;
+  formData: QrFormData;
 }
 
 export interface WifiConfig {

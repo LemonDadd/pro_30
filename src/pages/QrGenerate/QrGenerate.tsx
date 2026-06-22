@@ -6,8 +6,8 @@ import {
   Download, Image, Palette, Settings, Upload, ChevronDown, ChevronUp,
   AlertCircle
 } from 'lucide-react';
-import { downloadQrPng, downloadQrSvg, generateWifiString, generateVCardString, generateEmailString, generateSmsString, generateQrSvg } from '@/utils/qr';
-import type { QrContentType, WifiConfig, VCardConfig, EmailConfig, SmsConfig } from '@/types';
+import { downloadQrPng, downloadQrSvg, generateQrSvg } from '@/utils/qr';
+import type { QrContentType } from '@/types';
 import { saveHistory } from '@/utils/storage';
 
 const contentTypes: { type: QrContentType; label: string; icon: any }[] = [
@@ -21,58 +21,25 @@ const contentTypes: { type: QrContentType; label: string; icon: any }[] = [
 ];
 
 export default function QrGenerate() {
-  const { qrConfig, setQrConfig } = useQrStore();
+  const { 
+    qrConfig, setQrConfig, setQrType,
+    wifiConfig, setWifiConfig,
+    vcardConfig, setVcardConfig,
+    emailConfig, setEmailConfig,
+    smsConfig, setSmsConfig,
+    updateQrContent,
+  } = useQrStore();
   const { canvasRef, generate, getDataUrl } = useQrCanvas();
   const [expandedSection, setExpandedSection] = useState<string | null>('style');
-  const [wifiForm, setWifiForm] = useState<WifiConfig>({
-    ssid: '',
-    password: '',
-    security: 'WPA',
-    hidden: false,
-  });
-  const [vcardForm, setVcardForm] = useState<VCardConfig>({
-    firstName: '',
-    lastName: '',
-    organization: '',
-    title: '',
-    phone: '',
-    email: '',
-    url: '',
-    address: '',
-  });
-  const [emailForm, setEmailForm] = useState<EmailConfig>({
-    to: '',
-    subject: '',
-    body: '',
-  });
-  const [smsForm, setSmsForm] = useState<SmsConfig>({
-    phone: '',
-    message: '',
-  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const getContent = useCallback((): string => {
-    switch (qrConfig.type) {
-      case 'url':
-      case 'text':
-      case 'tel':
-        return qrConfig.content;
-      case 'wifi':
-        return generateWifiString(wifiForm);
-      case 'vcard':
-        return generateVCardString(vcardForm);
-      case 'email':
-        return generateEmailString(emailForm);
-      case 'sms':
-        return generateSmsString(smsForm);
-      default:
-        return qrConfig.content;
-    }
-  }, [qrConfig.type, qrConfig.content, wifiForm, vcardForm, emailForm, smsForm]);
+    return qrConfig.content || '';
+  }, [qrConfig.content]);
   
   const handleTypeChange = (type: QrContentType) => {
-    setQrConfig({ type, content: '' });
+    setQrType(type);
   };
   
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,9 +83,22 @@ export default function QrGenerate() {
   const saveToHistory = () => {
     const content = getContent();
     const preview = getDataUrl();
+    
+    const formData: typeof qrConfig.formData = {};
+    if (qrConfig.type === 'wifi') formData.wifi = { ...wifiConfig };
+    if (qrConfig.type === 'vcard') formData.vcard = { ...vcardConfig };
+    if (qrConfig.type === 'email') formData.email = { ...emailConfig };
+    if (qrConfig.type === 'sms') formData.sms = { ...smsConfig };
+    
+    const fullConfig = {
+      ...qrConfig,
+      content,
+      formData,
+    };
+    
     saveHistory({
       type: 'qr',
-      config: qrConfig,
+      config: fullConfig,
       preview,
       content: content.substring(0, 50),
     });
@@ -200,8 +180,8 @@ export default function QrGenerate() {
                     <label className="label-text">WiFi 名称 (SSID)</label>
                     <input
                       type="text"
-                      value={wifiForm.ssid}
-                      onChange={(e) => setWifiForm({ ...wifiForm, ssid: e.target.value })}
+                      value={wifiConfig.ssid}
+                      onChange={(e) => setWifiConfig({ ssid: e.target.value })}
                       placeholder="MyWiFi"
                       className="input-field"
                     />
@@ -210,8 +190,8 @@ export default function QrGenerate() {
                     <label className="label-text">密码</label>
                     <input
                       type="text"
-                      value={wifiForm.password}
-                      onChange={(e) => setWifiForm({ ...wifiForm, password: e.target.value })}
+                      value={wifiConfig.password}
+                      onChange={(e) => setWifiConfig({ password: e.target.value })}
                       placeholder="WiFi 密码"
                       className="input-field"
                     />
@@ -219,8 +199,8 @@ export default function QrGenerate() {
                   <div>
                     <label className="label-text">安全类型</label>
                     <select
-                      value={wifiForm.security}
-                      onChange={(e) => setWifiForm({ ...wifiForm, security: e.target.value as any })}
+                      value={wifiConfig.security}
+                      onChange={(e) => setWifiConfig({ security: e.target.value as any })}
                       className="select-field"
                     >
                       <option value="WPA">WPA/WPA2</option>
@@ -238,8 +218,8 @@ export default function QrGenerate() {
                       <label className="label-text">姓</label>
                       <input
                         type="text"
-                        value={vcardForm.lastName}
-                        onChange={(e) => setVcardForm({ ...vcardForm, lastName: e.target.value })}
+                        value={vcardConfig.lastName}
+                        onChange={(e) => setVcardConfig({ lastName: e.target.value })}
                         className="input-field"
                       />
                     </div>
@@ -247,8 +227,8 @@ export default function QrGenerate() {
                       <label className="label-text">名</label>
                       <input
                         type="text"
-                        value={vcardForm.firstName}
-                        onChange={(e) => setVcardForm({ ...vcardForm, firstName: e.target.value })}
+                        value={vcardConfig.firstName}
+                        onChange={(e) => setVcardConfig({ firstName: e.target.value })}
                         className="input-field"
                       />
                     </div>
@@ -257,8 +237,8 @@ export default function QrGenerate() {
                     <label className="label-text">公司/组织</label>
                     <input
                       type="text"
-                      value={vcardForm.organization}
-                      onChange={(e) => setVcardForm({ ...vcardForm, organization: e.target.value })}
+                      value={vcardConfig.organization}
+                      onChange={(e) => setVcardConfig({ organization: e.target.value })}
                       className="input-field"
                     />
                   </div>
@@ -266,8 +246,8 @@ export default function QrGenerate() {
                     <label className="label-text">职位</label>
                     <input
                       type="text"
-                      value={vcardForm.title}
-                      onChange={(e) => setVcardForm({ ...vcardForm, title: e.target.value })}
+                      value={vcardConfig.title}
+                      onChange={(e) => setVcardConfig({ title: e.target.value })}
                       className="input-field"
                     />
                   </div>
@@ -275,8 +255,8 @@ export default function QrGenerate() {
                     <label className="label-text">电话</label>
                     <input
                       type="tel"
-                      value={vcardForm.phone}
-                      onChange={(e) => setVcardForm({ ...vcardForm, phone: e.target.value })}
+                      value={vcardConfig.phone}
+                      onChange={(e) => setVcardConfig({ phone: e.target.value })}
                       className="input-field"
                     />
                   </div>
@@ -284,8 +264,8 @@ export default function QrGenerate() {
                     <label className="label-text">邮箱</label>
                     <input
                       type="email"
-                      value={vcardForm.email}
-                      onChange={(e) => setVcardForm({ ...vcardForm, email: e.target.value })}
+                      value={vcardConfig.email}
+                      onChange={(e) => setVcardConfig({ email: e.target.value })}
                       className="input-field"
                     />
                   </div>
@@ -293,8 +273,8 @@ export default function QrGenerate() {
                     <label className="label-text">网站</label>
                     <input
                       type="url"
-                      value={vcardForm.url}
-                      onChange={(e) => setVcardForm({ ...vcardForm, url: e.target.value })}
+                      value={vcardConfig.url}
+                      onChange={(e) => setVcardConfig({ url: e.target.value })}
                       className="input-field"
                     />
                   </div>
@@ -307,8 +287,8 @@ export default function QrGenerate() {
                     <label className="label-text">收件人</label>
                     <input
                       type="email"
-                      value={emailForm.to}
-                      onChange={(e) => setEmailForm({ ...emailForm, to: e.target.value })}
+                      value={emailConfig.to}
+                      onChange={(e) => setEmailConfig({ to: e.target.value })}
                       placeholder="example@email.com"
                       className="input-field"
                     />
@@ -317,8 +297,8 @@ export default function QrGenerate() {
                     <label className="label-text">主题</label>
                     <input
                       type="text"
-                      value={emailForm.subject}
-                      onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                      value={emailConfig.subject}
+                      onChange={(e) => setEmailConfig({ subject: e.target.value })}
                       placeholder="邮件主题"
                       className="input-field"
                     />
@@ -326,8 +306,8 @@ export default function QrGenerate() {
                   <div>
                     <label className="label-text">正文</label>
                     <textarea
-                      value={emailForm.body}
-                      onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                      value={emailConfig.body}
+                      onChange={(e) => setEmailConfig({ body: e.target.value })}
                       placeholder="邮件正文..."
                       rows={3}
                       className="input-field resize-none"
@@ -342,8 +322,8 @@ export default function QrGenerate() {
                     <label className="label-text">电话号码</label>
                     <input
                       type="tel"
-                      value={smsForm.phone}
-                      onChange={(e) => setSmsForm({ ...smsForm, phone: e.target.value })}
+                      value={smsConfig.phone}
+                      onChange={(e) => setSmsConfig({ phone: e.target.value })}
                       placeholder="+86 13800138000"
                       className="input-field"
                     />
@@ -351,8 +331,8 @@ export default function QrGenerate() {
                   <div>
                     <label className="label-text">短信内容</label>
                     <textarea
-                      value={smsForm.message}
-                      onChange={(e) => setSmsForm({ ...smsForm, message: e.target.value })}
+                      value={smsConfig.message}
+                      onChange={(e) => setSmsConfig({ message: e.target.value })}
                       placeholder="短信内容..."
                       rows={3}
                       className="input-field resize-none"
